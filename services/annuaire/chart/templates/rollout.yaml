@@ -42,6 +42,9 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.service.targetPort }}
+              # protocol explicite : sans lui le diff ServerSideApply d'ArgoCD
+              # échoue (la liste associative ports exige la clé protocol).
+              protocol: TCP
           env:
             - name: PORT
               value: {{ .Values.service.targetPort | quote }}
