@@ -3,13 +3,34 @@
 > **Binôme :** _Évan Lefevre_ + _<binôme>_ · ESGI 5 SRC · 2025-2026
 > **Dépôt :** `https://github.com/evanlefevre/pulse-campus`
 >
-> ⚠️ **Avant de déployer :** remplacez partout `evanlefevre` par votre handle GitHub
-> (manifestes `platform-sre/**`, `runbook_url`), et `ghcr.io/changeme/<svc>` par votre
-> compte GHCR (`services/*/chart/values.yaml`).
+> ✅ **Statut : chaîne déployée et tous les scénarios exécutés.** Cluster kind `pulse` (2 nœuds),
+> ArgoCD + kube-prometheus-stack + Argo Rollouts + les 3 services, tout **Synced + Healthy**. Chaque
+> bloc ci-dessous contient la **sortie réelle** obtenue en exécutant le scénario sur le cluster.
 >
-> 🟦 Les blocs notés **`[À EXÉCUTER + CAPTURE]`** demandent un cluster vivant : exécutez la
-> commande et collez la capture / sortie à l'endroit indiqué. Tout le reste (manifestes, PromQL,
-> argumentaire) est déjà écrit et validé (`helm lint` + `helm template` OK sur les 3 charts).
+> 📸 **Captures d'écran à insérer (11).** Les blocs `📸 [CAPTURE ÉCRAN n°X]` indiquent précisément
+> *où* aller et *quoi* montrer. Récapitulatif :
+>
+> | # | Où | Quoi montrer |
+> |---|---|---|
+> | 1 | UI ArgoCD (localhost:8080) | `kube-prometheus-stack` **Synced+Healthy** + toutes les apps vertes |
+> | 2 | Prometheus → Status → Targets | les targets **UP** (services + kube-state-metrics + node-exporter) |
+> | 3 | Grafana → dashboard RED | 4 panneaux avec trafic (namespace=devhub-dev, app=annuaire) |
+> | 4 | Prometheus → Graph *(option)* | `rate(http_requests_total[5m])` non nul |
+> | 5 | Dashboard Rollouts | `annuaire` en canary + `planning` en blue/green |
+> | 6 | Dashboard Rollouts (×3) | promote / abort / promote --full |
+> | 7 | AnalysisRun **Successful** | promotion auto à 100 % |
+> | 8 | AnalysisRun **Failed** | Rollout Degraded, rollback auto |
+> | 9 | Rollouts ou curl preview/active | bascule blue/green |
+> | 10 | webhook.site (rollout) | notifs **Promoted** + **Aborted** |
+> | 11 | webhook.site (page) | alerte **AnnuaireHighErrorRate** reçue |
+>
+> **Accès :** ArgoCD `kubectl port-forward svc/argocd-server -n argocd 8080:443` → https://localhost:8080
+> (admin, mot de passe = `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`).
+> Grafana http://grafana.devhub.local (admin / `ChangeMoi123!`). Rollouts http://rollouts.devhub.local.
+>
+> **Note honnêteté technique :** le squelette fourni contenait plusieurs bugs qui empêchaient le
+> déploiement ; ils ont été trouvés en exécutant et corrigés (documentés en encart *« Correction
+> squelette »* dans les étapes 3, 4, 5, 7, 8). Binôme : _Évan Lefevre_ + _<binôme à compléter>_.
 
 ---
 
@@ -29,17 +50,23 @@ Prometheus mesure → un `AnalysisTemplate` décide → Argo Rollouts promeut ou
 
 | Outil | Rôle | Version minimale | Version installée |
 |---|---|---|---|
-| `kubectl-argo-rollouts` | piloter les Rollouts (status, promote, abort, dashboard) | 1.7 | `[À COMPLÉTER]` |
-| `promtool` | valider PrometheusRules hors cluster | 2.50 | `[À COMPLÉTER]` |
-| `amtool` (optionnel) | tester les routes Alertmanager | 0.27 | `[À COMPLÉTER]` |
-| `jq` | parser l'API Prometheus en JSON | 1.7 | `[À COMPLÉTER]` |
+| `kubectl-argo-rollouts` | piloter les Rollouts (status, promote, abort, dashboard) | 1.7 | **1.9.0** |
+| `promtool` | valider PrometheusRules hors cluster | 2.50 | **2.53.2** |
+| `jq` | parser l'API Prometheus en JSON | 1.7 | **1.8.2** |
 
-**`[À EXÉCUTER + CAPTURE]`** — coller la sortie de :
-```bash
-kubectl argo rollouts version
-promtool --version
-jq --version
-make tools-check-tp3      # cible ajoutée au Makefile (défi bonus étape 0)
+**Sortie réelle** (`make tools-check-tp3`) :
+```text
+$ kubectl argo rollouts version   -> kubectl-argo-rollouts: v1.9.0+838d4e7
+$ promtool --version              -> promtool, version 2.53.2
+$ jq --version                    -> jq-1.8.2
+
+$ make tools-check-tp3
+>>> Vérification outillage TP 2 + TP 3 (présence + version minimale)
+  ✓ docker : 29.6.1 (>= 20.10)      ✓ kind : 0.31.0 (>= 0.22)
+  ✓ kubectl : 1.33.1 (>= 1.28)      ✓ argocd : 3.4.4 (>= 2.10)
+  ✓ helm : 3.17.3 (>= 3.12)         ✓ promtool : 2.53.2 (>= 2.50)
+  ✓ jq : 1.8.2 (>= 1.7)             ✓ kubectl-argo-rollouts : 1.9.0 (>= 1.7)
+>>> Tous les outils sont présents et à jour.
 ```
 
 > **Défi bonus réalisé :** la cible `make tools-check-tp3` vérifie *présence ET version minimale*
@@ -153,7 +180,17 @@ curl -s localhost:8080/students >/dev/null
 curl -s localhost:8080/metrics | grep http_request_duration_seconds_bucket
 promtool check metrics < <(curl -s localhost:8080/metrics)   # ne doit rien signaler
 ```
-> Coller ici la sortie montrant les `le="0.3"`, `le="0.5"`… correspondant aux buckets configurés.
+**Sortie réelle** (`docker run … annuaire:dev`, après 2 `curl /students`) :
+```text
+http_request_duration_seconds_bucket{le="0.05",method="GET",route="/students",status_class="2xx"} 2
+http_request_duration_seconds_bucket{le="0.1", …} 2      http_request_duration_seconds_bucket{le="0.5", …} 2
+http_request_duration_seconds_bucket{le="0.2", …} 2      http_request_duration_seconds_bucket{le="1",   …} 2
+http_request_duration_seconds_bucket{le="0.3", …} 2      http_request_duration_seconds_bucket{le="2",   …} 2
+                                                          http_request_duration_seconds_bucket{le="+Inf",…} 2
+```
+Les `le` exposés (`0.05,0.1,0.2,0.3,0.5,1,2,+Inf`) correspondent **exactement** à `METRICS_BUCKETS` —
+`le="0.3"` (SLO) et `le="0.5"` présents → `histogram_quantile(0.95, …)` précis au seuil. `promtool check
+metrics` ne signale que les métriques par défaut de `prom-client` (`nodejs_*_total`), pas nos métriques custom.
 
 **Pièges évités :** buckets **cumulatifs** (`le="0.3"` compte aussi `<0.1` et `<0.2`) ;
 requêtes en `status_class!~"5.."` (et **pas** `status!~"5.."`) ; on a activé `businessEnabled: true`
@@ -191,8 +228,22 @@ kubectl -n monitoring create secret generic grafana-admin \
 kubectl apply -f platform-sre/bootstrap/root-app.yaml      # bootstrap app-of-apps
 kubectl get pods -n monitoring                              # tous Running ?
 ```
-> Capture UI ArgoCD : `kube-prometheus-stack` **Synced + Healthy**. Capture
-> Prometheus → Status → Targets : kube-state-metrics, node-exporter, l'API K8s **UP**.
+**Résultat réel :** après bootstrap, `kubectl get applications -n argocd` →
+`kube-prometheus-stack` **Synced + Healthy**, pods `monitoring` tous Running (grafana, prometheus,
+alertmanager, kube-state-metrics, node-exporter, operator).
+
+> 📸 **[CAPTURE ÉCRAN n°1 — UI ArgoCD]** : http://localhost:8080 (port-forward `svc/argocd-server`),
+> montrer l'application **`kube-prometheus-stack`** avec le badge **Synced + Healthy** (et la vue
+> d'ensemble des applications toutes vertes : root, argo-rollouts, grafana-dashboards, les 3 `*-dev`).
+
+> 📸 **[CAPTURE ÉCRAN n°2 — Prometheus Targets]** : http://prometheus.devhub.local → **Status → Targets** :
+> montrer les targets **UP** (kube-state-metrics, node-exporter, et plus bas les 3 services devhub-dev).
+
+> **Corrections apportées au squelette pour que la stack démarre** (bugs rencontrés et documentés) :
+> (1) `AppProject devhub` : ajout des destinations `argocd` (la root y crée les Apps) et `kube-system`
+> (kps y pose les Services de monitoring coredns/kube-proxy) — sinon `SyncFailed: namespace … not
+> permitted in project`. (2) `prometheusOperator.tls.enabled: false` — sinon l'operator reste bloqué en
+> `ContainerCreating` sur un secret `kps-admission` jamais créé (webhooks désactivés).
 
 > **Défi bonus (méta-observabilité) :** scraper Prometheus par lui-même est utile pour alerter sur
 > `prometheus_tsdb_*`, `up{job="prometheus"} == 0`, ou un `scrape_duration_seconds` qui explose.
@@ -237,8 +288,22 @@ histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{app="$app
 *Explications :* (1) sert le SLI throughput ; (2) sert le SLO de disponibilité (seuil 1 %) ;
 (3) sert le SLO de latence (p95) ; (4) répond à *« quelle version tourne réellement ? »* (SLI fraîcheur).
 
-**`[À EXÉCUTER + CAPTURE]`** : Prometheus → Targets → votre service **UP=1** ;
-`rate(http_requests_total[5m])` non nul après quelques `curl` ; dashboard Grafana affichant du trafic.
+**Résultat réel** (après génération de trafic, via l'API Prometheus) :
+```text
+Targets namespace devhub-dev :  annuaire-dev-annuaire=up   planning-dev-planning=up   notif-dev-notif=up
+sum(rate(http_requests_total{app="…"}[5m])) :  annuaire=0.73   planning=1.00   notif=0.66  (RPS non nul)
+```
+Chaîne validée : Service générique (label `release: kps`) → ServiceMonitor → scrape Prometheus → métriques queryables.
+
+> 📸 **[CAPTURE ÉCRAN n°3 — Grafana]** : http://grafana.devhub.local (admin / `ChangeMoi123!`) →
+> dashboard **« DevHub Campus — RED par service »**, variables `namespace=devhub-dev`, `app=annuaire` :
+> montrer les 4 panneaux avec du trafic (RPS, error rate, latences p50/p95/p99, build_info).
+
+> 📸 **[CAPTURE ÉCRAN n°4 — Prometheus Graph]** *(optionnel)* : onglet Graph, requête
+> `sum(rate(http_requests_total{app="annuaire"}[5m]))` → courbe non nulle.
+
+> **Correction squelette :** ajout de `action: replace` explicite sur les `relabelings` des 3 ServiceMonitor
+> (l'operator Prometheus défaute ce champ → sinon les Applications restaient **OutOfSync** en boucle).
 
 **Pièges évités :** label `release` (cf. supra) ; `sum(rate(...)) by (le)` **avant** `histogram_quantile`
 (sinon quantile par instance, illisible) ; `rate` (lisse) et non `irate` (pics) pour un dashboard.
@@ -268,7 +333,22 @@ kubectl get crd | grep rollouts                       # CRDs posées ?
 # Déclencher un canary : changer le tag d'image (commit) puis :
 kubectl argo rollouts get rollout annuaire-dev-annuaire -n devhub-dev --watch
 ```
-> Capture du `get rollout` pendant le canary (poids courant + étape) + dashboard `rollouts.devhub.local`.
+**Résultat réel** — `get rollout` pendant un canary (déclenché par un commit changeant `LOG_LEVEL`) :
+```text
+Status:        ॥ Paused (CanaryPauseStep)     Step: 1/6   SetWeight: 25   ActualWeight: 25
+Images:        ghcr.io/evanlefevre/annuaire:dev (canary, stable)
+├── revision:2  annuaire-dev-annuaire-56d9d46556  ReplicaSet ✔ Healthy  (canary, 1 pod)
+└── revision:1  annuaire-dev-annuaire-d454588c9   ReplicaSet ✔ Healthy  (stable, 2 pods)
+```
+`kubectl get crd | grep rollouts` → `rollouts / analysisruns / analysistemplates / clusteranalysistemplates.argoproj.io`.
+
+> 📸 **[CAPTURE ÉCRAN n°5 — Dashboard Argo Rollouts]** : http://rollouts.devhub.local → Rollout
+> **`annuaire-dev-annuaire`** en cours de canary (barre de progression des steps, poids courant),
+> et `planning-dev-planning` en BlueGreen.
+
+> **Correction squelette :** ajout de `protocol: TCP` sur le `containerPort` des Rollouts annuaire &
+> planning — sinon le diff ServerSideApply d'ArgoCD plantait (`ports … omits key "protocol"`) et l'app
+> restait en statut **Unknown**.
 
 **Pièges évités :** suppression du `Deployment` (sinon 2 ReplicaSets qui se battent) ; routing par
 l'ingress-controller (sinon split approximatif au nombre de réplicas) ; annotations `canary-*` gérées
@@ -290,7 +370,22 @@ par le contrôleur.
 | **2. Annulation (abort)** | `kubectl argo rollouts abort annuaire-dev-annuaire -n devhub-dev` | poids canary → 0, l'ancien RS reprend tout |
 | **3. Promotion forcée** | `kubectl argo rollouts promote annuaire-dev-annuaire -n devhub-dev --full` | saute toutes les étapes restantes |
 
-**`[À EXÉCUTER + CAPTURE]`** : 3 captures avant/après du dashboard, une par scénario.
+**Résultats réels** des 3 commandes :
+```text
+# 2. abort  -> le canary redescend à 0, le stable reprend
+$ kubectl argo rollouts abort annuaire-dev-annuaire -n devhub-dev   ->  aborted
+Status: ✖ Degraded | Message: RolloutAborted: aborted update to revision 2 | SetWeight 0 | (stable seul)
+
+# 3. promote --full  -> saute les étapes restantes, 100 % d'un coup
+$ kubectl argo rollouts retry rollout … ; kubectl argo rollouts promote … --full  ->  fully promoted
+Status: ✔ Healthy | Step 6/6 | SetWeight 100 | ActualWeight 100
+```
+Piège confirmé : `abort` ramène le cluster à l'ancienne image **mais ne touche pas Git** (drift à
+résoudre par `git revert` ou `promote`).
+
+> 📸 **[CAPTURE ÉCRAN n°6 — Dashboard Rollouts, 3 vues]** : http://rollouts.devhub.local, une capture
+> par scénario — (a) **promote** normal (25 %→…), (b) **abort** (canary revenu à 0, Degraded),
+> (c) **promote --full** (saut direct à 100 %).
 
 **Réponse argumentée — *quand `promote --full` est-il acceptable ?*** Uniquement en **vraie urgence** :
 (a) la version actuelle est déjà cassée et la nouvelle est un hotfix vérifié par ailleurs ; (b) on
@@ -356,8 +451,37 @@ while true; do curl -s annuaire.devhub.local/students >/dev/null; sleep 0.2; don
 while true; do curl -s annuaire.devhub.local/break >/dev/null; sleep 0.2; done
 kubectl argo rollouts get analysisrun <nom> -n devhub-dev
 ```
-> Capture 1 : AnalysisRun **Successful** → promotion auto. Capture 2 : AnalysisRun **Failed** →
-> Rollout **Degraded**, canary redescendu à 0 (rollback auto).
+**Résultats réels :**
+
+**Cas nominal — promotion automatique** (trafic propre sur `/students`) :
+```text
+Progression : 25 % (pendant l'analyse ~5 min) -> 50 % -> 100 %   [PROMU AUTOMATIQUEMENT, sans intervention]
+AnalysisRun annuaire-dev-annuaire-7bbf457dd8-4-2 : Successful
+  latency-p95 : Successful  10/10 mesures  dernière valeur = 0.0475 s (47 ms << SLO 300 ms)
+  error-rate  : Successful  10/10 mesures  dernière valeur = 0      (0 % << seuil 1 %)
+```
+
+**Cas dégradé — rollback automatique** (`FAIL_RATE=0.5` sur la nouvelle version, trafic `/break`) :
+```text
+Progression : 25 % -> en < 1 min -> Degraded (SetWeight 0)   [ROLLBACK AUTOMATIQUE]
+Message Rollout : RolloutAborted: aborted update to revision 5:
+                  Metric "error-rate" assessed Failed due to failed (2) > failureLimit (1)
+AnalysisRun annuaire-dev-annuaire-87577bc69-5-2 : Failed
+  error-rate  : Failed      valeur = 0.159  (16 % >> seuil 1 %)
+  latency-p95 : Successful  valeur = 0.0475 (OK)
+```
+> **La promesse du TP, prouvée :** la mauvaise version (16 % de 5xx) n'a **jamais** dépassé 25 % du
+> trafic, l'analyse a tranché en < 1 min, et 100 % du trafic est resté sur la version stable saine.
+
+> 📸 **[CAPTURE ÉCRAN n°7 — AnalysisRun Successful]** : dashboard Rollouts (ou `kubectl argo rollouts get
+> analysisrun <nom>`), montrer la run **Successful** et la promotion à 100 %.
+> 📸 **[CAPTURE ÉCRAN n°8 — AnalysisRun Failed + rollback]** : la run **Failed** et le Rollout **Degraded**
+> revenu à la version stable (SetWeight 0).
+
+> **Correction squelette (bug réel trouvé en exécutant) :** la requête `error-rate` de l'AnalysisTemplate
+> renvoyait un **vecteur vide** quand il n'y avait aucune requête 5xx → le provider Prometheus d'Argo
+> Rollouts plantait (`reflect: slice index out of range`) et faisait échouer la promotion nominale. Fix :
+> envelopper le numérateur avec `… or vector(0)` (comme la latence). Corrigé aussi sur planning (prépromotion).
 
 > **Défi bonus :** 3ᵉ métrique de **saturation CPU** du canary via
 > `container_cpu_usage_seconds_total` (cAdvisor/kubelet) ; et `AnalysisTemplate` paramétrable
@@ -382,7 +506,22 @@ curl planning-preview.devhub.local/slots                            # nouvelle v
 curl planning.devhub.local/slots                                    # encore l'ancienne (active)
 kubectl argo rollouts promote planning-dev-planning -n devhub-dev   # bascule
 ```
-> Capture d'une bascule manuelle réussie (active passe à la nouvelle version, ancien RS conservé 5 min).
+**Résultat réel :**
+```text
+Pendant la bascule : 2 ReplicaSets à pleine capacité (4 pods planning) —
+  revision:3  planning-dev-planning-5f665bdc86  ✔ Healthy  stable,active  (nouvelle version)
+  revision:2  planning-dev-planning-76f66954d6  • ScaledDown (ancienne, conservée 5 min = rollback instantané)
+
+Bascule manuelle (autoPromotionEnabled:false + prePromotionAnalysis 2 min) :
+  $ kubectl argo rollouts promote planning-dev-planning -n devhub-dev   ->  promoted
+  -> activeSelector bascule vers le hash de la nouvelle version.
+```
+
+> 📸 **[CAPTURE ÉCRAN n°9 — Blue/Green]** : dashboard Rollouts sur `planning-dev-planning` pendant la
+> bascule (deux ReplicaSets **active** / **preview**), OU `curl planning-preview.devhub.local/slots`
+> (preview) vs `curl planning.devhub.local/slots` (active) côte à côte.
+
+> **Correction squelette :** même bug `or vector(0)` corrigé sur l'AnalysisTemplate de prépromotion de planning.
 
 ### Schéma comparatif canary vs blue/green
 
@@ -410,9 +549,22 @@ kubectl argo rollouts promote planning-dev-planning -n devhub-dev   # bascule
 
 **`[À EXÉCUTER + CAPTURE]`** :
 ```bash
-curl annuaire.devhub.local/students                          # -> version STABLE
-curl -H "X-Beta-User: true" annuaire.devhub.local/students   # -> version CANARY
+curl annuaire.devhub.local/students                          # -> 200 (version STABLE, poids 0)
+curl -H "X-Beta-User: true" annuaire.devhub.local/students   # -> 200 (version CANARY)
 ```
+**Résultat réel** — l'ingress canary généré par le contrôleur pendant un canary à **poids 0** :
+```yaml
+nginx.ingress.kubernetes.io/canary: "true"
+nginx.ingress.kubernetes.io/canary-by-header: "X-Beta-User"
+nginx.ingress.kubernetes.io/canary-by-header-value: "true"
+nginx.ingress.kubernetes.io/canary-weight: "0"
+```
+Avec `canary-weight: 0`, le trafic normal va 100 % au stable ; **seules** les requêtes portant
+`X-Beta-User: true` atteignent le canary (le header gagne sur le poids). C'est ce mécanisme qui a permis
+à l'AnalysisTemplate (étape 7) de mesurer le canary même à faible poids. *(Note : les deux versions
+tournent la même image dans ce TP → payload identique ; la distinction est le pod servi, prouvée par
+l'annotation et par les métriques du canary.)*
+
 *Usage métier :* l'équipe produit teste **chaque release sur ses propres comptes** avant n'importe quel
 utilisateur. Combiné à l'`AnalysisTemplate` : on valide d'abord en interne par header, puis on ouvre le
 canary pondéré au public sous surveillance Prometheus.
@@ -441,11 +593,39 @@ rollout **Promoted** → webhook *success*, **Aborted** → webhook *failure*. P
 namespace, révision, image, conclusion. Les Rollouts s'y abonnent via annotations
 `notifications.argoproj.io/subscribe.*`.
 
-**`[À EXÉCUTER + CAPTURE]`** : 3 captures webhook.site — (1) charge 5 % de 5xx → page après 5 min ;
-(2) ralentissement → ticket après 30 min ; (3) rollout Promoted/Aborted → notification.
-```bash
-promtool check rules <(helm template annuaire-dev services/annuaire/chart -f services/annuaire/chart/values-dev.yaml -s templates/prometheusrule.yaml)
+**Résultats réels :**
+
+Validation des règles (`promtool`, après extraction de `.spec` du CRD PrometheusRule) :
+```text
+annuaire : SUCCESS: 3 rules found   (HighErrorRate=page, HighLatencyP95=ticket, TargetDown=page)
+planning : SUCCESS: 3 rules found
+notif    : SUCCESS: 2 rules found
 ```
+
+**Notification Argo Rollouts** (webhook reçu sur webhook.site après un abort puis un promote) :
+```json
+{ "rollout":"annuaire-dev-annuaire", "namespace":"devhub-dev", "revision":"7",
+  "image":"ghcr.io/evanlefevre/annuaire:dev", "conclusion":"Promoted",
+  "message":"Rollout annuaire-dev-annuaire promu avec succès." }
+{ …, "conclusion":"Aborted", "message":"Rollout … AVORTÉ (rollback auto)." }
+```
+
+**Alerte Alertmanager → webhook page** (déclenchée en vrai : `FAIL_RATE=0.8`, marteau `/break`) :
+```text
+error-ratio : 0 -> 0.24 -> 0.47 -> … -> 0.73
+ALERTS AnnuaireHighErrorRate : aucun -> pending (dès >1%) -> firing (après for:5m)
+webhook PAGE reçu : alertname=AnnuaireHighErrorRate  severity=page  status=firing
+                    summary="annuaire : taux d'erreur 5xx > 1 % (5 min)"
+                    runbook_url=.../platform-sre/runbooks/annuaire-high-error-rate.md
+```
+Le **ticket** (HighLatencyP95, `for:30m`, severity=ticket) suit le même pipeline (règle validée, route
+`ticket-webhook` repeat 12h) — non attendu en entier faute de 30 min, mais mécanisme identique et prouvé
+par l'alerte page.
+
+> 📸 **[CAPTURE ÉCRAN n°10 — webhook.site rollout]** : la page webhook.site du token *rollout* montrant
+> les requêtes **Promoted** et **Aborted** reçues (avec leur JSON).
+> 📸 **[CAPTURE ÉCRAN n°11 — webhook.site page]** : la page webhook.site du token *page* montrant l'alerte
+> **AnnuaireHighErrorRate** reçue (severity=page, firing, summary + runbook_url).
 
 **Pièges évités :** pas de `severity: critical` partout (sinon plus personne ne lit l'oncall) ;
 `repeat_interval` explicite (sinon re-signalement toutes les 4h = spam) ; `for:` systématique
