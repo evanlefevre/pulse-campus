@@ -33,7 +33,7 @@ spec:
         prometheus:
           address: http://prometheus-operated.monitoring.svc.cluster.local:9090
           query: |
-            sum(rate(http_requests_total{app="{{ include "annuaire.name" . }}", namespace="{{ .Release.Namespace }}", rollouts_pod_template_hash="{{ `{{args.canary-hash}}` }}", status_class="5xx"}[1m]))
+            (sum(rate(http_requests_total{app="{{ include "annuaire.name" . }}", namespace="{{ .Release.Namespace }}", rollouts_pod_template_hash="{{ `{{args.canary-hash}}` }}", status_class="5xx"}[1m])) or vector(0))
             /
             clamp_min(sum(rate(http_requests_total{app="{{ include "annuaire.name" . }}", namespace="{{ .Release.Namespace }}", rollouts_pod_template_hash="{{ `{{args.canary-hash}}` }}"}[1m])), 1)
     - name: latency-p95

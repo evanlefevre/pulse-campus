@@ -6,7 +6,7 @@ ingress:
   host: annuaire.devhub.local
 
 env:
-  LOG_LEVEL: debug
+  LOG_LEVEL: warn
 
 # ServiceMonitor actif en dev (étape 4).
 monitoring:
