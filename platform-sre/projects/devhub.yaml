@@ -28,6 +28,9 @@ spec:
       namespace: monitoring
     - server: https://kubernetes.default.svc
       namespace: argo-rollouts
+    # la root (App of Apps) et les Applications enfants sont créées dans argocd.
+    - server: https://kubernetes.default.svc
+      namespace: argocd
 
   # Le kube-prometheus-stack pose beaucoup de CRDs cluster-scoped.
   # En l'état (vide) ArgoCD bloquerait leur création. Vous devez whitelister
