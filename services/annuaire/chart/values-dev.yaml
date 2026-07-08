@@ -6,8 +6,7 @@ ingress:
   host: annuaire.devhub.local
 
 env:
-  LOG_LEVEL: warn
-  FAIL_RATE: "0.8"
+  LOG_LEVEL: info
 
 # ServiceMonitor actif en dev (étape 4).
 monitoring:
