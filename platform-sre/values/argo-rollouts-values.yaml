@@ -26,8 +26,8 @@ notifications:
     create: true
     # Les credentials/URLs vivent dans le Secret, pas dans le ConfigMap.
     items:
-      webhook-success-url: "https://webhook.site/REMPLACEZ-SUCCES"
-      webhook-failure-url: "https://webhook.site/REMPLACEZ-ECHEC"
+      webhook-success-url: "https://webhook.site/714cc9e7-4409-4c79-ab9f-cf16d8ced036"
+      webhook-failure-url: "https://webhook.site/714cc9e7-4409-4c79-ab9f-cf16d8ced036"
   notifiers:
     service.webhook.success: |
       url: $webhook-success-url

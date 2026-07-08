@@ -93,11 +93,11 @@ alertmanager:
       - name: "default"
       - name: "page-webhook"
         webhook_configs:
-          - url: "https://webhook.site/REMPLACEZ-PAR-VOTRE-URL-PAGE"
+          - url: "https://webhook.site/b256a22f-a3f6-4293-8941-dbf9990a1265"
             send_resolved: true
       - name: "ticket-webhook"
         webhook_configs:
-          - url: "https://webhook.site/REMPLACEZ-PAR-VOTRE-URL-TICKET"
+          - url: "https://webhook.site/0511dcf8-5320-42fb-a76c-ebc2f6d67ab3"
             send_resolved: true
     # Si on "page", inutile d'ouvrir aussi un "ticket" pour le même service.
     inhibit_rules:
