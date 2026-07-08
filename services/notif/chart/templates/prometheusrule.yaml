@@ -1,0 +1,43 @@
+{{- /*
+  PrometheusRule de notif (étape 10). SLO le plus souple (99 %).
+*/ -}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "notif.fullname" . }}
+  labels:
+    {{- include "notif.labels" . | nindent 4 }}
+    release: {{ .Values.monitoring.serviceMonitor.release | quote }}
+spec:
+  groups:
+    - name: notif.slo
+      rules:
+        - alert: NotifHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{app="{{ include "notif.name" . }}", status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total{app="{{ include "notif.name" . }}"}[5m])), 1)
+            > 0.02
+          for: 10m
+          labels:
+            severity: ticket
+            service: notif
+          annotations:
+            summary: "notif : taux d'erreur 5xx > 2 % (10 min)"
+            description: "notif dépasse 2 % de 5xx depuis 10 minutes (SLO 99 %, service non critique)."
+            runbook_url: "https://github.com/evanlefevre/pulse-campus/blob/main/platform-sre/runbooks/notif-high-error-rate.md"
+        - alert: NotifHighLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{app="{{ include "notif.name" . }}"}[5m])) by (le)
+            ) > 0.5
+          for: 30m
+          labels:
+            severity: ticket
+            service: notif
+          annotations:
+            summary: "notif : latence p95 dégradée (> 500 ms, 30 min)"
+            description: "La latence p95 de notif dépasse son SLO (500 ms) depuis 30 minutes."
+            runbook_url: "https://github.com/evanlefevre/pulse-campus/blob/main/platform-sre/runbooks/notif-high-latency.md"
+{{- end }}

@@ -1,0 +1,87 @@
+# Values par défaut du chart planning.
+# Surchargées par values-dev.yaml selon l'environnement.
+
+image:
+  repository: ghcr.io/evanlefevre/planning
+  tag: dev
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  host: planning.devhub.local
+  path: /
+
+# Ingress de PREVIEW (blue/green, étape 8) : pointe sur le previewService pour
+# tester la nouvelle version AVANT bascule. Activé en values-dev.yaml.
+previewIngress:
+  enabled: false
+  host: planning-preview.devhub.local
+
+env:
+  LOG_LEVEL: info
+
+# Buckets alignés sur le SLO p95 < 400 ms (planning est plus critique : on
+# garde un peu de résolution autour de 0.3-0.5).
+metrics:
+  buckets: "0.05,0.1,0.2,0.3,0.4,0.5,1,2"
+  businessEnabled: true
+
+monitoring:
+  enabled: true
+  serviceMonitor:
+    interval: 30s
+    release: kps
+
+# planning est migré en Rollout BLUE/GREEN (étape 8). Deployment de secours coupé.
+useDeployment: false
+
+# Stratégie blue/green (étape 8).
+rollout:
+  revisionHistoryLimit: 3
+  blueGreen:
+    # Bascule manuelle pour la 1re démo, puis automatisée par l'analyse.
+    autoPromotionEnabled: false
+    # On garde l'ancienne version 5 min après bascule pour rollback instantané.
+    scaleDownDelaySeconds: 300
+  # prePromotionAnalysis : vérifie la preview avant d'autoriser la bascule (étape 8).
+  analysis:
+    enabled: true
+    interval: 30s
+    count: 4               # 4 mesures => 2 min de vérification preview
+    failureLimit: 1
+    errorRateThreshold: "0.01"
+    latencyP95Threshold: "0.4"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+probes:
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 2
+    periodSeconds: 5
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 10

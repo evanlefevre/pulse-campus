@@ -1,0 +1,45 @@
+{{- /*
+  ServiceMonitor (étape 4) — CRD posée par le Prometheus Operator.
+  Sélectionne le Service GÉNÉRIQUE (service.yaml) qui pointe sur TOUS les pods
+  (stable + canary), pour que Prometheus voie les deux versions.
+
+  Le label `release: kps` est OBLIGATOIRE : le Prometheus du chart ne
+  sélectionne que les ServiceMonitor portant ce label (cf. values kps).
+
+  Deux relabelings clés :
+    - rollouts_pod_template_hash : permet à l'AnalysisTemplate (étape 7) de
+      filtrer les métriques de la version canary uniquement ;
+    - app : label de service STABLE (= nom du chart), pour filtrer par service
+      dans les alertes et le dashboard sans dépendre du nom de release.
+*/ -}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "annuaire.fullname" . }}
+  labels:
+    {{- include "annuaire.labels" . | nindent 4 }}
+    release: {{ .Values.monitoring.serviceMonitor.release | quote }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "annuaire.selectorLabels" . | nindent 6 }}
+      # release distingue le Service générique (scraping de TOUS les pods) des
+      # Services stable/canary (routage) qui partagent les mêmes selectorLabels :
+      # sans ça, on scraperait 3 fois les mêmes pods.
+      release: {{ .Values.monitoring.serviceMonitor.release | quote }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_rollouts_pod_template_hash]
+          targetLabel: rollouts_pod_template_hash
+        - sourceLabels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+          targetLabel: app
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+{{- end }}

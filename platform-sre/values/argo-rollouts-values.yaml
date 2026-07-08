@@ -1,0 +1,84 @@
+# Values du chart argo-rollouts.
+# Référence : https://github.com/argoproj/argo-helm/tree/main/charts/argo-rollouts
+#
+# Étape 5 du poly.
+
+# Active le dashboard Web et l'expose via ingress sur rollouts.devhub.local.
+dashboard:
+  enabled: true
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - rollouts.devhub.local
+    paths:
+      - /
+    pathType: Prefix
+
+# Notifications Argo Rollouts (étape 10).
+# Le contrôleur lit le ConfigMap `argo-rollouts-notification-configmap` et le
+# Secret `argo-rollouts-notification-secret`. Le chart les génère à partir d'ici.
+#   - rollout PROMU (Healthy)  -> webhook "success"
+#   - rollout AVORTÉ (rollback) -> webhook "failure" (= le webhook de page)
+# Remplacez les URLs par vos endpoints webhook.site.
+notifications:
+  secret:
+    create: true
+    # Les credentials/URLs vivent dans le Secret, pas dans le ConfigMap.
+    items:
+      webhook-success-url: "https://webhook.site/REMPLACEZ-SUCCES"
+      webhook-failure-url: "https://webhook.site/REMPLACEZ-ECHEC"
+  notifiers:
+    service.webhook.success: |
+      url: $webhook-success-url
+      headers:
+        - name: Content-Type
+          value: application/json
+    service.webhook.failure: |
+      url: $webhook-failure-url
+      headers:
+        - name: Content-Type
+          value: application/json
+  templates:
+    # Payload minimal demandé par le poly : nom, versions, durée, conclusion.
+    template.rollout-completed: |
+      webhook:
+        success:
+          method: POST
+          body: |
+            {
+              "rollout": "{{.rollout.metadata.name}}",
+              "namespace": "{{.rollout.metadata.namespace}}",
+              "revision": "{{index .rollout.metadata.annotations "rollout.argoproj.io/revision"}}",
+              "image": "{{(index .rollout.spec.template.spec.containers 0).image}}",
+              "conclusion": "Promoted",
+              "message": "Rollout {{.rollout.metadata.name}} promu avec succès."
+            }
+    template.rollout-aborted: |
+      webhook:
+        failure:
+          method: POST
+          body: |
+            {
+              "rollout": "{{.rollout.metadata.name}}",
+              "namespace": "{{.rollout.metadata.namespace}}",
+              "revision": "{{index .rollout.metadata.annotations "rollout.argoproj.io/revision"}}",
+              "image": "{{(index .rollout.spec.template.spec.containers 0).image}}",
+              "conclusion": "Aborted",
+              "message": "Rollout {{.rollout.metadata.name}} AVORTÉ (rollback auto)."
+            }
+  triggers:
+    trigger.on-rollout-completed: |
+      - send: [rollout-completed]
+        when: rollout.status.phase == 'Healthy'
+    trigger.on-rollout-aborted: |
+      - send: [rollout-aborted]
+        when: rollout.status.abort == true
+
+# En kind, gardez les ressources légères.
+controller:
+  replicas: 1
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false

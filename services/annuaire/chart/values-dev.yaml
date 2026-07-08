@@ -1,0 +1,13 @@
+# Surcharges pour l'environnement de développement (namespace devhub-dev).
+# Ne mettez ICI que ce qui diffère de values.yaml.
+
+ingress:
+  enabled: true
+  host: annuaire.devhub.local
+
+env:
+  LOG_LEVEL: debug
+
+# ServiceMonitor actif en dev (étape 4).
+monitoring:
+  enabled: true

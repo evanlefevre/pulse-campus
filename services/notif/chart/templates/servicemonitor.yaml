@@ -1,0 +1,30 @@
+{{- /*
+  ServiceMonitor de notif (étape 4). notif reste un Deployment classique : pas
+  de canary, donc pas de label rollouts-pod-template-hash (le relabeling est
+  alors sans effet, ce qui est inoffensif). Label release:kps obligatoire.
+*/ -}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "notif.fullname" . }}
+  labels:
+    {{- include "notif.labels" . | nindent 4 }}
+    release: {{ .Values.monitoring.serviceMonitor.release | quote }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "notif.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+          targetLabel: app
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+{{- end }}

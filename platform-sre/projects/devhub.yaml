@@ -1,0 +1,55 @@
+# AppProject ArgoCD : `devhub` (élargi pour le TP 3)
+#
+# Reprise de l'AppProject du TP 2 avec un cercle de destinations élargi :
+#   - les namespaces applicatifs (devhub-*)
+#   - le namespace monitoring (kube-prometheus-stack)
+#   - le namespace argo-rollouts (contrôleur Argo Rollouts)
+#
+# Référence : https://argo-cd.readthedocs.io/en/stable/operator-manual/project-management/
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: devhub
+  namespace: argocd
+spec:
+  description: Plateforme DevHub Campus SRE (TP 3)
+
+  # TODO : URL de votre fork du repo pulse-campus.
+  sourceRepos:
+    # - https://github.com/evanlefevre/pulse-campus.git
+    - "*"
+
+  # TODO : ajustez si vous nommez vos namespaces différemment.
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: devhub-*
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+    - server: https://kubernetes.default.svc
+      namespace: argo-rollouts
+
+  # Le kube-prometheus-stack pose beaucoup de CRDs cluster-scoped.
+  # En l'état (vide) ArgoCD bloquerait leur création. Vous devez whitelister
+  # au minimum les CRDs et namespaces pour que la stack s'installe.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    # RBAC cluster-scoped posé par le Prometheus Operator, kube-state-metrics,
+    # node-exporter, Grafana et le contrôleur Argo Rollouts.
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    # Webhooks d'admission éventuels du Prometheus Operator (désactivés en
+    # values sur kind, mais on whiteliste par sécurité pour éviter un OutOfSync).
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

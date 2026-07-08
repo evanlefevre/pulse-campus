@@ -1,0 +1,9 @@
+apiVersion: v2
+name: notif
+description: Chart Helm du service notif — DevHub Campus SRE (TP 3)
+type: application
+version: 0.2.0
+appVersion: "0.2.0"
+maintainers:
+  - name: Évan Lefevre
+    email: lefevreevan70@gmail.com

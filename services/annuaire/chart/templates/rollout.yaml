@@ -1,0 +1,116 @@
+{{- /*
+  Rollout CANARY d'annuaire (étapes 5 → 7 + 9).
+  Rendu uniquement quand useDeployment=false (le Deployment de secours
+  disparaît alors). Le pod template est identique à celui du Deployment :
+  on ne change QUE la stratégie de propagation interne au cluster.
+
+  Progression pédagogique des steps (état final = étape 7) :
+    étape 5 : setWeight 20 / pause 30s / 50 / pause 30s / 100      (sans analysis)
+    étape 6 : setWeight 10 / pause {} / 50 / pause 1m / 100        (pause manuelle)
+    étape 7 : setWeight 25 / pause 30s / ANALYSIS / 50 / pause 1m / 100
+  C'est l'état étape 7 qui est commité ci-dessous.
+*/ -}}
+{{- if not .Values.useDeployment }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "annuaire.fullname" . }}
+  labels:
+    {{- include "annuaire.labels" . | nindent 4 }}
+  annotations:
+    # Abonnement aux notifications du contrôleur (étape 10).
+    notifications.argoproj.io/subscribe.on-rollout-completed.success: ""
+    notifications.argoproj.io/subscribe.on-rollout-aborted.failure: ""
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: {{ .Values.rollout.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "annuaire.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "annuaire.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+      containers:
+        - name: annuaire
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+          env:
+            - name: PORT
+              value: {{ .Values.service.targetPort | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.env.LOG_LEVEL | quote }}
+            - name: METRICS_BUCKETS
+              value: {{ .Values.metrics.buckets | quote }}
+            - name: METRICS_BUSINESS_ENABLED
+              value: {{ .Values.metrics.businessEnabled | quote }}
+            - name: VERSION
+              value: {{ .Chart.AppVersion | quote }}
+            - name: COMMIT
+              value: {{ .Values.image.tag | quote }}
+            # FAIL_RATE permet de simuler une régression pour tester le rollback
+            # auto (étape 7). 0 par défaut ; surchargez via values pour la démo.
+            - name: FAIL_RATE
+              value: {{ .Values.env.FAIL_RATE | default "0" | quote }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem }}
+            allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation }}
+            capabilities:
+              {{- toYaml .Values.securityContext.capabilities | nindent 14 }}
+  strategy:
+    canary:
+      # Deux Services distincts ; Argo Rollouts injecte le sélecteur
+      # rollouts-pod-template-hash dans chacun pour router stable vs canary.
+      stableService: {{ include "annuaire.fullname" . }}-stable
+      canaryService: {{ include "annuaire.fullname" . }}-canary
+      trafficRouting:
+        nginx:
+          # L'ingress "stable" du chart sert de base ; le contrôleur en dérive
+          # un ingress canary (poids + annotations nginx canary-*).
+          stableIngress: {{ include "annuaire.fullname" . }}
+          {{- if .Values.rollout.canaryByHeader.enabled }}
+          # Étape 9 : routage par header. Les requêtes portant ce header vont
+          # TOUJOURS sur le canary, quel que soit le setWeight.
+          additionalIngressAnnotations:
+            canary-by-header: {{ .Values.rollout.canaryByHeader.headerName }}
+            canary-by-header-value: {{ .Values.rollout.canaryByHeader.headerValue | quote }}
+          {{- end }}
+      steps:
+        - setWeight: 25
+        - pause: {duration: 30s}
+        {{- if .Values.rollout.analysis.enabled }}
+        # Promotion SUR PREUVE : l'analyse interroge Prometheus avant de monter à 50 %.
+        - analysis:
+            templates:
+              - templateName: {{ include "annuaire.fullname" . }}-analysis
+            args:
+              # Hash du ReplicaSet canary, injecté à l'exécution par le contrôleur.
+              - name: canary-hash
+                valueFrom:
+                  podTemplateHashValue: Latest
+        {{- end }}
+        - setWeight: 50
+        - pause: {duration: 1m}
+        - setWeight: 100
+{{- end }}

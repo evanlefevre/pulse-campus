@@ -1,0 +1,24 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "annuaire.fullname" . }}
+  labels:
+    {{- include "annuaire.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: Prefix
+            backend:
+              service:
+                # En mode Rollout, l'ingress "stable" pointe sur le Service stable ;
+                # Argo Rollouts en dérive l'ingress canary. Sinon (Deployment de
+                # secours), il pointe sur le Service générique.
+                name: {{ include "annuaire.fullname" . }}{{ if not .Values.useDeployment }}-stable{{ end }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

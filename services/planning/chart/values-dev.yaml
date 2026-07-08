@@ -1,0 +1,18 @@
+# Surcharges pour l'environnement de développement (namespace devhub-dev).
+# Ne mettez ICI que ce qui diffère de values.yaml.
+
+ingress:
+  enabled: true
+  host: planning.devhub.local
+
+env:
+  LOG_LEVEL: debug
+
+# ServiceMonitor actif en dev (étape 4).
+monitoring:
+  enabled: true
+
+# Hôte de la preview interne (étape 8). Non exposé aux utilisateurs.
+previewIngress:
+  enabled: true
+  host: planning-preview.devhub.local

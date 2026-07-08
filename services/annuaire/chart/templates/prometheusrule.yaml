@@ -1,0 +1,59 @@
+{{- /*
+  PrometheusRule (étape 4 bonus + étape 10).
+  Gradation des sévérités :
+    - HighErrorRate  -> severity=page   (réveille à 3h, for: 5m)
+    - HighLatencyP95 -> severity=ticket (attend lundi, for: 30m)
+    - TargetDown     -> severity=page   (le service ne répond plus)
+  Label `release: kps` obligatoire pour être sélectionnée par Prometheus.
+  Chaque alerte a un for: (anti-flapping) et un runbook_url.
+*/ -}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "annuaire.fullname" . }}
+  labels:
+    {{- include "annuaire.labels" . | nindent 4 }}
+    release: {{ .Values.monitoring.serviceMonitor.release | quote }}
+spec:
+  groups:
+    - name: annuaire.slo
+      rules:
+        - alert: AnnuaireHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{app="{{ include "annuaire.name" . }}", status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total{app="{{ include "annuaire.name" . }}"}[5m])), 1)
+            > 0.01
+          for: 5m
+          labels:
+            severity: page
+            service: annuaire
+          annotations:
+            summary: "annuaire : taux d'erreur 5xx > 1 % (5 min)"
+            description: "Le taux de 5xx d'annuaire dépasse 1 % depuis 5 minutes. Error budget en consommation rapide."
+            runbook_url: "https://github.com/evanlefevre/pulse-campus/blob/main/platform-sre/runbooks/annuaire-high-error-rate.md"
+        - alert: AnnuaireHighLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{app="{{ include "annuaire.name" . }}"}[5m])) by (le)
+            ) > 0.3
+          for: 30m
+          labels:
+            severity: ticket
+            service: annuaire
+          annotations:
+            summary: "annuaire : latence p95 dégradée (> 300 ms, 30 min)"
+            description: "La latence p95 d'annuaire dépasse son SLO (300 ms) depuis 30 minutes."
+            runbook_url: "https://github.com/evanlefevre/pulse-campus/blob/main/platform-sre/runbooks/annuaire-high-latency.md"
+        - alert: AnnuaireTargetDown
+          expr: up{app="{{ include "annuaire.name" . }}"} == 0
+          for: 2m
+          labels:
+            severity: page
+            service: annuaire
+          annotations:
+            summary: "annuaire : cible Prometheus DOWN"
+            description: "Prometheus ne scrape plus annuaire depuis 2 minutes (pod down ou ServiceMonitor cassé)."
+            runbook_url: "https://github.com/evanlefevre/pulse-campus/blob/main/platform-sre/runbooks/annuaire-target-down.md"
+{{- end }}

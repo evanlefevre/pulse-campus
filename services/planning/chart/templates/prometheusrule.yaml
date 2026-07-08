@@ -1,0 +1,54 @@
+{{- /*
+  PrometheusRule de planning (étape 10). planning est le service le plus
+  critique (SLO 99,9 %) : seuils plus stricts qu'annuaire.
+*/ -}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "planning.fullname" . }}
+  labels:
+    {{- include "planning.labels" . | nindent 4 }}
+    release: {{ .Values.monitoring.serviceMonitor.release | quote }}
+spec:
+  groups:
+    - name: planning.slo
+      rules:
+        - alert: PlanningHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{app="{{ include "planning.name" . }}", status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total{app="{{ include "planning.name" . }}"}[5m])), 1)
+            > 0.01
+          for: 5m
+          labels:
+            severity: page
+            service: planning
+          annotations:
+            summary: "planning : taux d'erreur 5xx > 1 % (5 min)"
+            description: "planning (SLO 99,9 %) dépasse 1 % de 5xx depuis 5 minutes."
+            runbook_url: "https://github.com/evanlefevre/pulse-campus/blob/main/platform-sre/runbooks/planning-high-error-rate.md"
+        - alert: PlanningHighLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{app="{{ include "planning.name" . }}"}[5m])) by (le)
+            ) > 0.4
+          for: 30m
+          labels:
+            severity: ticket
+            service: planning
+          annotations:
+            summary: "planning : latence p95 dégradée (> 400 ms, 30 min)"
+            description: "La latence p95 de planning dépasse son SLO (400 ms) depuis 30 minutes."
+            runbook_url: "https://github.com/evanlefevre/pulse-campus/blob/main/platform-sre/runbooks/planning-high-latency.md"
+        - alert: PlanningTargetDown
+          expr: up{app="{{ include "planning.name" . }}"} == 0
+          for: 2m
+          labels:
+            severity: page
+            service: planning
+          annotations:
+            summary: "planning : cible Prometheus DOWN"
+            description: "Prometheus ne scrape plus planning depuis 2 minutes."
+            runbook_url: "https://github.com/evanlefevre/pulse-campus/blob/main/platform-sre/runbooks/planning-target-down.md"
+{{- end }}

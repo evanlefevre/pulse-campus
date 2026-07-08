@@ -1,0 +1,26 @@
+{{- /*
+  Ingress de PREVIEW (étape 8) — joignable par l'équipe interne uniquement.
+  Pointe sur le previewService pour valider la nouvelle version avant bascule.
+  Sans cet ingress, le previewService est inaccessible (piège classique du poly).
+*/ -}}
+{{- if and (not .Values.useDeployment) .Values.previewIngress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "planning.fullname" . }}-preview
+  labels:
+    {{- include "planning.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.previewIngress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "planning.fullname" . }}-preview
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

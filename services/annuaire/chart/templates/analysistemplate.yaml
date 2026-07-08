@@ -1,0 +1,53 @@
+{{- /*
+  AnalysisTemplate (étape 7) — la promotion SUR PREUVE.
+  Interroge le Prometheus interne pendant le canary. Deux métriques :
+    1. error-rate : proportion de 5xx de la version CANARY < 1 %
+    2. latency-p95 : p95 de la version CANARY < SLO (0,3 s)
+  Échantillonné toutes les 30 s, 10 fois => 5 min. Une mesure Failed => rollback.
+
+  Le filtrage canary vs stable se fait sur rollouts_pod_template_hash (remonté
+  par le ServiceMonitor). Ce hash est passé en argument par le Rollout à
+  l'exécution (valueFrom.podTemplateHashValue: Latest).
+
+  NB Helm : les `{{args.canary-hash}}` doivent rester LITTÉRAUX (templating Argo,
+  pas Helm) -> on les protège avec un backtick raw string Helm.
+*/ -}}
+{{- if .Values.rollout.analysis.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "annuaire.fullname" . }}-analysis
+  labels:
+    {{- include "annuaire.labels" . | nindent 4 }}
+spec:
+  args:
+    - name: canary-hash
+  metrics:
+    - name: error-rate
+      interval: {{ .Values.rollout.analysis.interval }}
+      count: {{ .Values.rollout.analysis.count }}
+      failureLimit: {{ .Values.rollout.analysis.failureLimit }}
+      # clamp_min évite la division par zéro (et donc le NaN) sur trafic faible.
+      successCondition: "result[0] <= {{ .Values.rollout.analysis.errorRateThreshold }}"
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_requests_total{app="{{ include "annuaire.name" . }}", namespace="{{ .Release.Namespace }}", rollouts_pod_template_hash="{{ `{{args.canary-hash}}` }}", status_class="5xx"}[1m]))
+            /
+            clamp_min(sum(rate(http_requests_total{app="{{ include "annuaire.name" . }}", namespace="{{ .Release.Namespace }}", rollouts_pod_template_hash="{{ `{{args.canary-hash}}` }}"}[1m])), 1)
+    - name: latency-p95
+      interval: {{ .Values.rollout.analysis.interval }}
+      count: {{ .Values.rollout.analysis.count }}
+      failureLimit: {{ .Values.rollout.analysis.failureLimit }}
+      # `or vector(...)` : sur trafic nul, renvoie une latence neutre plutôt
+      # qu'un vecteur vide (qui rendrait l'analyse Inconclusive).
+      successCondition: "result[0] <= {{ .Values.rollout.analysis.latencyP95Threshold }}"
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{app="{{ include "annuaire.name" . }}", namespace="{{ .Release.Namespace }}", rollouts_pod_template_hash="{{ `{{args.canary-hash}}` }}"}[2m])) by (le)
+            ) or vector(0)
+{{- end }}

@@ -1,0 +1,31 @@
+# Application ArgoCD : dashboards Grafana (étape 4).
+#
+# Déploie les ConfigMaps de dashboards (générés depuis platform-sre/dashboards/)
+# dans le namespace monitoring. Le sidecar Grafana les importe automatiquement.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana-dashboards
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devhub
+
+  source:
+    # TODO : URL de votre fork.
+    repoURL: https://github.com/evanlefevre/pulse-campus.git
+    targetRevision: main
+    path: platform-sre/dashboards
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

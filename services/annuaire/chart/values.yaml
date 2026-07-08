@@ -1,0 +1,85 @@
+# Values par défaut du chart annuaire.
+# Surchargées par values-dev.yaml selon l'environnement.
+
+image:
+  repository: ghcr.io/evanlefevre/annuaire
+  tag: dev
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  host: annuaire.devhub.local
+  path: /
+
+env:
+  LOG_LEVEL: info
+
+# Métriques Prometheus — paramètres injectés au pod via variables d'environnement.
+# Buckets alignés sur le SLO p95 < 300 ms (étape 2) : on resserre autour de 0.3
+# et on retire le 5 (inutile, le SLO est largement franchi bien avant).
+metrics:
+  buckets: "0.05,0.1,0.2,0.3,0.5,1,2"
+  businessEnabled: true
+
+# ServiceMonitor activé (étape 4).
+monitoring:
+  enabled: true
+  serviceMonitor:
+    interval: 30s
+    # Doit correspondre au releaseName du chart kube-prometheus-stack.
+    release: kps
+
+# annuaire est migré en Rollout (canary, étape 5+). On coupe le Deployment de
+# secours : c'est rollout.yaml qui prend le relais (rendu si useDeployment=false).
+useDeployment: false
+
+# Stratégie de livraison progressive (étapes 5 → 7 + 9).
+rollout:
+  revisionHistoryLimit: 3
+  # AnalysisTemplate branché sur Prometheus (étape 7).
+  analysis:
+    enabled: true
+    interval: 30s          # une mesure toutes les 30 s
+    count: 10              # 10 mesures => 5 min d'observation
+    failureLimit: 1        # une mesure Failed => rollback immédiat
+    errorRateThreshold: "0.01"   # 5xx / total < 1 %
+    latencyP95Threshold: "0.3"   # p95 < 300 ms (= SLO étape 1)
+  # Routage par header pour les tests internes (étape 9).
+  canaryByHeader:
+    enabled: true
+    headerName: X-Beta-User
+    headerValue: "true"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+probes:
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 2
+    periodSeconds: 5
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 10

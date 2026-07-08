@@ -1,0 +1,45 @@
+# Root Application (pattern App of Apps) — version TP 3.
+#
+# C'est la SEULE Application que vous créez à la main avec `kubectl apply`.
+# Tout le reste sera créé par elle, à partir des fichiers de `platform-sre/apps/`.
+#
+# Référence : https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devhub
+
+  source:
+    # TODO : remplacez par l'URL HTTPS de votre fork de ce repo.
+    repoURL: https://github.com/evanlefevre/pulse-campus.git
+    # TODO : choisissez une révision stable (branche `main`, ou un tag).
+    targetRevision: main
+    # Recurse sur platform-sre/apps : observability + dev.
+    path: platform-sre/apps
+    directory:
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  # Décision : sur la ROOT (app-of-apps) on garde selfHeal:false et prune:false.
+  # Raison : la root ne fait que créer/mettre à jour des Applications enfants.
+  #   - selfHeal:false  -> si un opérateur supprime momentanément une App enfant
+  #     pour debug, ArgoCD ne la recrée pas dans la seconde (on garde la main).
+  #   - prune:false     -> une App retirée du Git n'est pas supprimée
+  #     automatiquement du cluster (garde-fou contre un mauvais commit qui
+  #     effacerait toute la plateforme). On prune manuellement, en conscience.
+  # Les Applications ENFANTS, elles, ont selfHeal:true (drift applicatif corrigé vite).
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
