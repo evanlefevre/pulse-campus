@@ -124,3 +124,7 @@ prometheusOperator:
     patch:
       enabled: false
     enabled: false
+  # TLS de l'operator désactivé : sinon il monte un secret `kps-admission`
+  # (jamais créé car les webhooks sont off) et reste en ContainerCreating.
+  tls:
+    enabled: false
