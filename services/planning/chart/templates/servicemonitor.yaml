@@ -26,10 +26,14 @@ spec:
       path: /metrics
       interval: {{ .Values.monitoring.serviceMonitor.interval }}
       relabelings:
+        # action explicite : l'operator défaut `action: replace` (sinon OutOfSync perpétuel).
         - sourceLabels: [__meta_kubernetes_pod_label_rollouts_pod_template_hash]
           targetLabel: rollouts_pod_template_hash
+          action: replace
         - sourceLabels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
           targetLabel: app
+          action: replace
         - sourceLabels: [__meta_kubernetes_pod_name]
           targetLabel: pod
+          action: replace
 {{- end }}
