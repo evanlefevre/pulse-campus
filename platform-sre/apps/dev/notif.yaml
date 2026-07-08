@@ -27,7 +27,8 @@ spec:
 
   syncPolicy:
     automated:
-      prune: false
+      # prune non spécifié = false (défaut). L'expliciter crée un écart permanent
+      # (ArgoCD l'omet de l'objet live → root OutOfSync).
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
