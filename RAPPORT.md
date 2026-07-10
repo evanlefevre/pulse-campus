@@ -1,6 +1,6 @@
 # RAPPORT — TP 3 · DevHub Campus SRE · Livraison progressive & observabilité
 
-> **Binôme :** _Évan Lefevre_ + _<binôme>_ · ESGI 5 SRC · 2025-2026
+> **Auteur :** Évan Lefevre · ESGI 5 SRC · 2025-2026
 > **Dépôt :** `https://github.com/evanlefevre/pulse-campus`
 >
 > ✅ **Statut : chaîne déployée et tous les scénarios exécutés.** Cluster kind `pulse` (2 nœuds),
@@ -30,7 +30,7 @@
 >
 > **Note honnêteté technique :** le squelette fourni contenait plusieurs bugs qui empêchaient le
 > déploiement ; ils ont été trouvés en exécutant et corrigés (documentés en encart *« Correction
-> squelette »* dans les étapes 3, 4, 5, 7, 8). Binôme : _Évan Lefevre_ + _<binôme à compléter>_.
+> squelette »* dans les étapes 3, 4, 5, 7, 8).
 
 ---
 
