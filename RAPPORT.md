@@ -8,8 +8,6 @@ l'observabilité (Prometheus, Grafana, Alertmanager), pour ne promouvoir une nou
 les métriques sont bonnes. Cluster local kind `pulse` (2 nœuds), 3 services : annuaire (canary),
 planning (blue/green), notif (classique).
 
-> Les lignes **📸 CAPTURE** indiquent une capture d'écran à insérer, et ce qu'elle doit montrer.
-
 ---
 
 ## Étape 0 — Outils
@@ -77,9 +75,8 @@ version `65.5.0`, values dans le repo). Le mot de passe Grafana est sorti de Git
 Déploiement : `kubectl apply -f platform-sre/bootstrap/root-app.yaml` (seul apply manuel), puis
 ArgoCD crée tout le reste.
 
-> 📸 **CAPTURE 1** — UI ArgoCD (port-forward `svc/argocd-server` puis https://localhost:8080) :
-> l'application **kube-prometheus-stack** en **Synced / Healthy**, et la liste des applications toutes
-> vertes.
+*Capture 1 — ArgoCD : l'application kube-prometheus-stack en Synced/Healthy, et la liste des
+applications toutes vertes.*
 
 ---
 
@@ -93,10 +90,10 @@ Le dashboard Grafana « DevHub Campus — RED par service » est un seul dashboa
 `namespace` et `app`) chargé en GitOps. Ses 4 panneaux : RPS par route, taux d'erreur 5xx, latence
 p50/p95/p99, et build_info (version active).
 
-> 📸 **CAPTURE 2** — Prometheus, menu **Status → Targets** : les 3 services `devhub-dev` en **UP**.
->
-> 📸 **CAPTURE 3** — Grafana, dashboard **DevHub Campus — RED par service** (namespace=devhub-dev,
-> app=annuaire) avec du trafic : les 4 panneaux qui affichent des courbes.
+*Capture 2 — Prometheus (Status → Targets) : les 3 services devhub-dev en UP.*
+
+*Capture 3 — Grafana, dashboard RED par service (namespace=devhub-dev, app=annuaire) avec du trafic :
+les 4 panneaux affichent des courbes.*
 
 ---
 
@@ -114,8 +111,8 @@ kubectl argo rollouts get rollout annuaire-dev-annuaire -n devhub-dev
 Résultat pendant un canary : Status `Paused`, Step 1/6, SetWeight 25, un ReplicaSet canary (1 pod) et
 un ReplicaSet stable (2 pods).
 
-> 📸 **CAPTURE 4** — Dashboard Argo Rollouts (http://rollouts.devhub.local) : annuaire en **Canary** et
-> planning en **BlueGreen**.
+*Capture 4 — Dashboard Argo Rollouts (rollouts.devhub.local) : annuaire en Canary et planning en
+BlueGreen.*
 
 ---
 
@@ -131,8 +128,8 @@ un ReplicaSet stable (2 pods).
 l'analyse. À noter : `abort` ramène le cluster à l'ancienne version mais ne modifie pas Git, il y a
 donc un écart à corriger ensuite (git revert ou promote).
 
-> 📸 **CAPTURE 5** — Dashboard Rollouts pendant un canary en cours (poids 25 %, revision canary vs
-> revision stable, bouton Promote actif).
+*Capture 5 — Dashboard Rollouts pendant un canary en cours : poids 25 %, revision canary vs revision
+stable, bouton Promote actif.*
 
 ---
 
@@ -158,9 +155,9 @@ AnalysisRun : Failed  ->  Rollout Degraded, SetWeight 0
 ```
 La mauvaise version n'a jamais dépassé 25 % du trafic et a été retirée en moins d'une minute.
 
-> 📸 **CAPTURE 6** — l'AnalysisRun **Successful** (ou le rollout promu à 100 % après analyse).
->
-> 📸 **CAPTURE 7** — l'AnalysisRun **Failed** et le rollout revenu au stable (rollback automatique).
+*Capture 6 — L'AnalysisRun Successful (ou le rollout promu à 100 % après analyse).*
+
+*Capture 7 — L'AnalysisRun Failed et le rollout revenu au stable (rollback automatique).*
 
 ---
 
@@ -179,8 +176,8 @@ kubectl argo rollouts promote planning-dev-planning -n devhub-dev   # bascule ac
 Différence avec le canary : les deux versions tournent à pleine capacité (2× les ressources), la
 bascule est totale d'un coup, et le rollback est immédiat.
 
-> 📸 **CAPTURE 8** — Dashboard Rollouts sur planning : les deux ReplicaSets (active + preview) pendant
-> la bascule, ou les deux `curl` (preview vs active).
+*Capture 8 — Dashboard Rollouts sur planning : les deux révisions (active + preview) en parallèle
+pendant la bascule.*
 
 ---
 
@@ -214,9 +211,9 @@ Tests réels :
 - FAIL_RATE=0.8 + trafic /break → l'alerte `AnnuaireHighErrorRate` passe en firing après 5 min, et le
   webhook page reçoit l'alerte (severity page, summary, runbook_url).
 
-> 📸 **CAPTURE 9** — webhook.site (rollout) : la requête reçue avec le JSON `conclusion: Promoted`.
->
-> 📸 **CAPTURE 10** — webhook.site (page) : l'alerte `AnnuaireHighErrorRate`, severity page.
+*Capture 9 — webhook.site (rollout) : la requête reçue avec le JSON `conclusion: Promoted`.*
+
+*Capture 10 — webhook.site (page) : l'alerte AnnuaireHighErrorRate, severity page.*
 
 ---
 
