@@ -198,6 +198,7 @@ Donc le trafic normal reste 100 % sur le stable, et seul le header force le cana
 
 Chaque service a des règles d'alerte (`PrometheusRule`), validées par `promtool` (annuaire : 3 règles,
 planning : 3, notif : 2). Gradation :
+
 - HighErrorRate → **page** (réveille, `for: 5m`)
 - HighLatencyP95 → **ticket** (`for: 30m`)
 - TargetDown → **page**
@@ -243,6 +244,7 @@ latence. Le vrai gain, c'est de limiter l'impact d'une mauvaise version (25 % du
 d'une minute au lieu de toute la flotte).
 
 Ce que la chaîne ne fait toujours pas, et ce que j'ajouterais ensuite :
+
 - **Tracing distribué** (OpenTelemetry + Jaeger) pour savoir où naît une latence entre services.
 - **Logs centralisés** (Loki) corrélés aux métriques.
 - **Policy d'admission** (Kyverno) pour empêcher un déploiement sans AnalysisTemplate.
@@ -253,6 +255,7 @@ Ce que la chaîne ne fait toujours pas, et ce que j'ajouterais ensuite :
 ## Problèmes rencontrés (et corrigés)
 
 Le squelette fourni ne se déployait pas tel quel. J'ai dû corriger :
+
 - l'AppProject qui n'autorisait pas les namespaces `argocd` et `kube-system` ;
 - l'operator Prometheus bloqué (désactivé `prometheusOperator.tls`) ;
 - le port des Rollouts sans `protocol: TCP` (erreur de diff ServerSideApply) ;
